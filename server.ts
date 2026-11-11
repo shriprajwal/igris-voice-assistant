@@ -947,7 +947,8 @@ Return your response in a clear, well-structured JSON format matching this schem
   });
 
   // Vite development integration
-  if (process.env.NODE_ENV !== "production") {
+  const isProduction = process.env.NODE_ENV === "production" || !process.argv.some(arg => arg.includes("server.ts"));
+  if (!isProduction) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
