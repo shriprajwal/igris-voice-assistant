@@ -1,4 +1,5 @@
 import { ScreenCapture } from "./ScreenCapture";
+import { VisionAnalyzer } from "./VisionAnalyzer";
 import { StateManager } from "../state/StateManager";
 import { LiveSession } from "../live/LiveSession";
 
@@ -81,7 +82,6 @@ export class VisionManager {
   public async analyzeScreen(question?: string, context?: string) {
     this.setStatus("Analyzing");
     try {
-      const { VisionAnalyzer } = await import("./VisionAnalyzer");
       const result = await VisionAnalyzer.getInstance().analyzeCurrentScreen(question, context);
       return result;
     } finally {
