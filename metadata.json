@@ -1,0 +1,6 @@
+{
+  "name": "IGRIS Voice Assistant",
+  "description": "A real-time, voice-to-voice futuristic AI assistant named IGRIS.",
+  "requestFramePermissions": ["microphone", "display-capture"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

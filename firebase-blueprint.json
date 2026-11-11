@@ -1,0 +1,70 @@
+{
+  "entities": {
+    "MemoryItem": {
+      "title": "MemoryItem",
+      "description": "A single persistent memory item about the user (the Monarch)",
+      "type": "object",
+      "properties": {
+        "category": {
+          "type": "string",
+          "enum": ["preference", "personal", "task", "history"],
+          "description": "The category of memory"
+        },
+        "key": {
+          "type": "string",
+          "description": "The key identifier of the memory (e.g., 'user_name')"
+        },
+        "value": {
+          "type": "string",
+          "description": "The description/value details of the memory"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last update timestamp"
+        }
+      },
+      "required": ["category", "key", "value", "createdAt", "updatedAt"]
+    },
+    "Transcript": {
+      "title": "Transcript",
+      "description": "A saved session transcript containing logs and user-IGRIS interactions",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The unique user ID who owns this transcript"
+        },
+        "title": {
+          "type": "string",
+          "description": "User-defined or auto-generated title for the transcript"
+        },
+        "logs": {
+          "type": "string",
+          "description": "JSON string representing the serialized log entries of this session"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp"
+        }
+      },
+      "required": ["userId", "title", "logs", "createdAt"]
+    }
+  },
+  "firestore": {
+    "memories/{memoryId}": {
+      "schema": "MemoryItem",
+      "description": "User memories managed by IGRIS personal assistant"
+    },
+    "transcripts/{transcriptId}": {
+      "schema": "Transcript",
+      "description": "Vocal/text logs and transcript entries saved persistently by the user"
+    }
+  }
+}
