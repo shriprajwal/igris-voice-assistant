@@ -1,7 +1,39 @@
 # IGRIS 2.0 — Intelligent General Response & Integrated Support
-### Full Voice-Controlled Windows Desktop AI Agent & Automation Companion
+### Autonomous Voice-Controlled AI Computer-Use Assistant & Screen Perception System
 
-IGRIS is an advanced, voice-controlled Windows desktop AI assistant. Powered by Gemini Live (`gemini-3.1-flash-live-preview`), React, PySide6 QtWebEngine, and a dedicated Python Desktop Automation Engine, IGRIS understands natural-language spoken directives and executes operations directly on your Windows PC.
+IGRIS is an advanced, voice-controlled AI assistant that bridges conversational AI with real-world computer execution. Powered by Google Gemini Live (`gemini-3.1-flash-live-preview`), React + TypeScript, PySide6 QtWebEngine, and a dedicated Python Desktop Automation Engine, IGRIS perceives the screen, reasons over multi-step goals, and executes verified actions across browsers and Windows applications.
+
+---
+
+## 🎯 Problem Statement (Open Innovation)
+
+Modern voice assistants and AI chatbots are **passive**: they can answer questions or describe screenshots, but they cannot reliably **see, understand, and act** inside a user's live computing environment. Users with accessibility needs, heavy multitasking workflows, or complex browser/desktop routines still have to manually switch windows, locate buttons, type across forms, and verify outcomes.
+
+Existing automation tools either:
+- Rely on brittle, hardcoded screen coordinates that break across DPI scales and window layouts,
+- Treat each screenshot as an isolated image without UI accessibility context, or
+- Lack an Observe → Act → Verify feedback loop with human-in-the-loop safety controls.
+
+---
+
+## 💡 Proposed Solution & Innovation
+
+IGRIS 2.0 solves this by combining **real-time bidirectional voice intelligence**, **hybrid screen perception**, and **verified autonomous execution**:
+
+1. **Hybrid Screen Perception (`ScreenPerception`)**: Fuses **Windows UI Automation (UIA)** control trees, **Windows native WinRT OCR**, perceptual frame diffing, and **Gemini Vision** so IGRIS understands structured UI elements and exact coordinates rather than guessing from pixels alone.
+2. **Observe → Act → Verify Autonomous Loop (`ObserveActVerify`)**: Breaks multi-step user instructions (e.g., *"Open Chrome, search for tutorials, open the first result, and summarize it"*) into discrete steps, executes each action, and verifies state changes (window focus, typed text read-back, tab changes) before advancing.
+3. **Dual Cloud + Local Architecture**:
+   - **Web / Cloud Mode (Render / Browser)**: Runs Gemini Live voice interaction, browser tab management, web search, memory, and browser `getDisplayMedia()` screen sharing from any browser.
+   - **Native Desktop Mode (`IGRIS.exe` / Local)**: Adds full Windows OS control via a PySide6 desktop shell and local Python IPC engine (`127.0.0.1:4848`) using Win32 `SendInput` and UIA.
+4. **Safety-First Guardrails**: Strict action allowlists, shell metacharacter filtering, human-in-the-loop confirmation for sensitive actions, and instant voice/UI halt (`"IGRIS, stop"`).
+
+---
+
+## 🌍 Impact & Use Cases
+
+- **Hands-Free Accessibility**: Enables users with motor impairments or repetitive strain injuries to navigate apps, browse the web, and type via natural voice.
+- **Developer & Knowledge-Worker Productivity**: Automates repetitive multi-app workflows (file navigation, research, tab switching, form entry) without writing custom scripts.
+- **Zero-Friction Deployment**: Works both as a hosted web application and as a standalone Windows desktop executable.
 
 ---
 
@@ -29,7 +61,7 @@ IGRIS is an advanced, voice-controlled Windows desktop AI assistant. Powered by 
 - **Dual Engine Architecture**: Combines an asynchronous Python IPC Engine (port `4848`) with a high-throughput Node.js / Express voice bridge (`localhost:3000`).
 - **PyInstaller Executable**: Packaged into a standalone Windows executable (`dist_app/IGRIS/IGRIS.exe`).
 
-### 4. Interactive PC Control Panel
+### 5. Interactive PC Control Panel
 - **Real-Time Visualizer**: Live circular visualization with particle animations and sound wave telemetry.
 - **Execution Log**: Step-by-step progress tracking displaying `OBSERVE` -> `VALIDATE` -> `EXECUTE` -> `VERIFY` states.
 - **Human-in-the-Loop Safeguards**: High-risk operations (e.g., folder creation, file deletions) prompt for Monarch authorization before proceeding.
@@ -80,14 +112,15 @@ IGRIS is an advanced, voice-controlled Windows desktop AI assistant. Powered by 
 ### 1. Installation
 
 ```powershell
-# Clone or navigate to the repository
-cd d:\Igris\igris-voice-assistant
+# Clone and enter the repository
+git clone https://github.com/shriprajwal/igris-voice-assistant.git
+cd igris-voice-assistant
 
 # Install Node.js dependencies
-npm install
+npm install --include=dev
 
-# Install required Python packages
-python -m pip install PySide6 psutil pyinstaller
+# Install required Python packages (for local Windows desktop mode)
+python -m pip install -r requirements.txt
 ```
 
 ### 2. Configuration
@@ -142,15 +175,15 @@ dist_app/IGRIS/IGRIS.exe
 Both TypeScript and Python test suites are provided to ensure complete system stability:
 
 ### Python Desktop Engine Test Suite
-Tests contextual folder navigation, strict Bluetooth/Wi-Fi isolation, action validation, and system controls:
+Tests contextual folder navigation, strict Bluetooth/Wi-Fi isolation, action validation, input controller, screen perception, and system controls (77 tests):
 ```powershell
-python -m unittest tests/test_python_engine.py
+python -m unittest discover tests
 ```
 
-### TypeScript Desktop Engine Test Suite
-Tests the native bridge, multi-step plan execution, authorization prompt lifecycle, and halt protocols:
+### TypeScript Desktop Engine & Typecheck Test Suite
+Runs TypeScript typechecking and tests the native bridge, multi-step plan execution, authorization prompt lifecycle, and halt protocols:
 ```powershell
-npx tsx tests/test_desktop_engine.ts
+npm test
 ```
 
 ---
