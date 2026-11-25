@@ -19,10 +19,11 @@ export const StarfieldBackground: React.FC<StarfieldBackgroundProps> = ({ isShad
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { alpha: false });
     if (!ctx) return;
 
     let animationFrameId: number;
+    let lastDrawTime = 0;
     let width = (canvas.width = window.innerWidth);
     let height = (canvas.height = window.innerHeight);
 
@@ -92,8 +93,11 @@ export const StarfieldBackground: React.FC<StarfieldBackgroundProps> = ({ isShad
       resizeObserver.observe(canvas.parentElement);
     }
 
-    // Animation Loop
-    const draw = () => {
+    // Animation Loop (paced at ~30 FPS to keep UI crisp without starving GPU/CPU)
+    const draw = (ts: number = 0) => {
+      animationFrameId = requestAnimationFrame(draw);
+      if (ts - lastDrawTime < 33) return;
+      lastDrawTime = ts;
       // Smoothly interpolate mouse drift for organic motion response
       mouse.x += (mouse.targetX - mouse.x) * 0.06;
       mouse.y += (mouse.targetY - mouse.y) * 0.06;
@@ -176,11 +180,9 @@ export const StarfieldBackground: React.FC<StarfieldBackgroundProps> = ({ isShad
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, width, height);
       }
-
-      animationFrameId = requestAnimationFrame(draw);
     };
 
-    draw();
+    animationFrameId = requestAnimationFrame(draw);
 
     return () => {
       cancelAnimationFrame(animationFrameId);

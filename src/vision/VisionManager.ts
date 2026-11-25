@@ -22,6 +22,9 @@ export class VisionManager {
         StateManager.getInstance().addLog("Visual screen assistance disconnected.", "info");
       } else {
         this.setStatus("Connected");
+        if (this.currentSession && !this.captureCleanup) {
+          this.startStreaming();
+        }
       }
     });
   }
@@ -65,8 +68,8 @@ export class VisionManager {
   /**
    * Starts the screen capture and streaming loop
    */
-  public async startVision(): Promise<void> {
-    await this.startVisionAssist();
+  public async startVision(monitorId: number = 0): Promise<void> {
+    await this.startVisionAssist(monitorId);
   }
 
   /**
@@ -115,12 +118,12 @@ export class VisionManager {
   /**
    * Starts the screen capture and streaming loop
    */
-  public async startVisionAssist(): Promise<void> {
+  public async startVisionAssist(monitorId: number = 0): Promise<void> {
     try {
-      StateManager.getInstance().addLog("Requesting screen vision permission from Monarch...", "info");
-      await ScreenCapture.getInstance().startCapture();
+      StateManager.getInstance().addLog(`Authorizing desktop observation (Display ${monitorId + 1})...`, "info");
+      await ScreenCapture.getInstance().startCapture(monitorId);
       
-      StateManager.getInstance().addLog("Visual interface connected. Screen vision active.", "success");
+      StateManager.getInstance().addLog("Visual interface connected. Desktop observation active.", "success");
       this.setStatus("Connected");
       
       // Notify the active LiveSession so IGRIS verbally responds

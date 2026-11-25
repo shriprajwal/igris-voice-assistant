@@ -9,6 +9,8 @@ import { ToolManager } from "../tools/ToolManager";
 import { MemoryManager } from "../memory/MemoryManager";
 import { VoiceManager } from "../voice/VoiceManager";
 import { getAuthorizedUser } from "../memory/AuthorizedUser";
+import { DesktopStatus, DesktopAction } from "../desktop/types";
+import { StateManager } from "../state/StateManager";
 
 export type SessionState = "disconnected" | "connecting" | "listening" | "speaking" | "muted";
 
@@ -19,6 +21,7 @@ export interface SessionCallbacks {
   onLog: (text: string, type: "info" | "success" | "warning" | "error" | "system") => void;
   onError: (error: string) => void;
   onAudioInputLevel?: (level: number) => void;
+  onDesktopStatus?: (status: DesktopStatus) => void;
 }
 
 export class LiveSession {
@@ -168,6 +171,14 @@ export class LiveSession {
               }
               break;
 
+            case "desktop_status":
+              // Real-time desktop control engine state update
+              if (this.callbacks.onDesktopStatus && msg.data) {
+                this.callbacks.onDesktopStatus(msg.data);
+              }
+              StateManager.getInstance().update({ desktopStatus: msg.data });
+              break;
+
             case "error":
               this.callbacks.onError(msg.error);
               this.callbacks.onLog(`Error received: ${msg.error}`, "error");
@@ -276,6 +287,35 @@ export class LiveSession {
     this.isModelSpeaking = false;
     this.updateState("disconnected");
     this.callbacks.onLog("IGRIS offline. Standby mode active.", "system");
+  }
+
+  /**
+   * Immediately abort ongoing desktop automation task
+   */
+  public stopDesktopTask(): void {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: "stop_task" }));
+      this.callbacks.onLog("Emergency halt signal dispatched to desktop engine.", "warning");
+    }
+  }
+
+  /**
+   * Respond to desktop security permission prompt
+   */
+  public sendPermissionResponse(requestId: string, approved: boolean): void {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: "permission_response", requestId, approved }));
+      this.callbacks.onLog(`Authorization ${approved ? "granted" : "denied"} for request '${requestId}'.`, approved ? "success" : "warning");
+    }
+  }
+
+  /**
+   * Send manual desktop action request directly to backend
+   */
+  public sendDesktopAction(action: DesktopAction): void {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: "execute_desktop_action", action }));
+    }
   }
 
   private updateState(newState: SessionState) {

@@ -612,8 +612,8 @@ export class BrowserManager {
       }
     }
     
-    // Default to reloading current dashboard in simulated environment
-    window.location.reload();
-    return true;
+    // In desktop application, never reload the main application window
+    console.log("[BrowserManager] refreshActiveTab: No external browser tab active to refresh.");
+    return false;
   }
 }

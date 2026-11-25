@@ -19,7 +19,8 @@ import {
   Edit3,
   Check,
   X,
-  RotateCcw
+  RotateCcw,
+  Eye
 } from "lucide-react";
 import { LiveSession } from "./live/LiveSession";
 import { ToolManager } from "./tools/ToolManager";
@@ -30,6 +31,8 @@ import { useTheme } from "./themes/ThemeContext";
 import { ThemeManager } from "./themes/ThemeManager";
 import { VisionPanel } from "./components/VisionPanel";
 import { VisionManager } from "./vision/VisionManager";
+import { ScreenCapture } from "./vision/ScreenCapture";
+import { ScreenAccessModal } from "./components/ScreenAccessModal";
 import { getAuthorizedUser, saveAuthorizedUser } from "./memory/AuthorizedUser";
 import { EmotionManager } from "./emotion/EmotionManager";
 import { CoreSoundEffects } from "./audio/CoreSoundEffects";
@@ -40,16 +43,34 @@ import { ReasoningManager } from "./intelligence/ReasoningManager";
 import { LearningManager } from "./learning/LearningManager";
 import { PersonalityEngine } from "./intelligence/PersonalityEngine";
 import { ContextManager } from "./intelligence/ContextManager";
+import { DesktopControlPanel } from "./components/DesktopControlPanel";
 
 export default function App() {
   const [session, setSession] = useState<LiveSession | null>(null);
   const sessionRef = useRef<LiveSession | null>(null);
   const [sessionDuration, setSessionDuration] = useState<number>(0);
-  const [activeDashboardTab, setActiveDashboardTab] = useState<"memory" | "vision">("memory");
+  const [activeDashboardTab, setActiveDashboardTab] = useState<"memory" | "vision" | "desktop">("memory");
   const [showBootFlash, setShowBootFlash] = useState(false);
   const [authorizedUser, setAuthorizedUserState] = useState<string>("Monarch");
   const [isEditingUser, setIsEditingUser] = useState(false);
   const [editingUserName, setEditingUserName] = useState("");
+  const [showScreenAuthModal, setShowScreenAuthModal] = useState(false);
+  const [isScreenObserving, setIsScreenObserving] = useState(false);
+
+  useEffect(() => {
+    // Check if desktop observation is active on start
+    ScreenCapture.getInstance().checkStatus().then((st) => {
+      if (st && st.isCapturing) {
+        setIsScreenObserving(true);
+      }
+    });
+
+    const unsubCapture = ScreenCapture.getInstance().subscribe((active) => {
+      setIsScreenObserving(active);
+    });
+
+    return () => unsubCapture();
+  }, []);
 
   useEffect(() => {
     const initUser = async () => {
@@ -946,7 +967,8 @@ export default function App() {
     let isCancelled = false;
 
     if (state === "disconnected") {
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      const isQtWebEngine = typeof navigator !== "undefined" && navigator.userAgent.includes("QtWebEngine");
+      const SpeechRecognition = !isQtWebEngine ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition) : null;
       if (SpeechRecognition) {
         try {
           recognition = new SpeechRecognition();
@@ -1374,6 +1396,35 @@ export default function App() {
           </select>
         </div>
 
+        {/* Screen Observation Quick Controller */}
+        <div className="flex items-center gap-2 z-20">
+          {isScreenObserving ? (
+            <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 px-3.5 py-1.5 rounded-full text-[10px] font-mono shadow-sm shadow-emerald-500/20">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-emerald-300 font-bold uppercase tracking-wider">OBSERVING DESKTOP</span>
+              <button
+                onClick={() => VisionManager.getInstance().stopVisionAssist()}
+                className="text-emerald-400 hover:text-rose-400 ml-1.5 transition-colors cursor-pointer text-[9px] uppercase font-bold"
+                title="Stop Desktop Observation"
+              >
+                [STOP]
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => {
+                ScreenCapture.getInstance().connect(0);
+                setActiveDashboardTab("vision");
+              }}
+              className="flex items-center gap-1.5 bg-white/[0.03] hover:bg-cyan-500/10 border border-white/10 hover:border-cyan-500/30 px-3.5 py-1.5 rounded-full text-[10px] font-mono text-slate-300 hover:text-cyan-300 transition-all duration-300 cursor-pointer uppercase tracking-wider shadow-sm"
+              title="Start Desktop Observation"
+            >
+              <Eye className="w-3.5 h-3.5 text-cyan-400" />
+              <span>OBSERVE DESKTOP</span>
+            </button>
+          )}
+        </div>
+
         {/* Authorized User Profile Block */}
         <div className="flex gap-4 items-center bg-white/5 backdrop-blur-xl border border-white/10 px-5 py-2.5 rounded-full hover:bg-white/10 transition-all duration-300">
           {isEditingUser ? (
@@ -1749,15 +1800,45 @@ export default function App() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Real-time PC Control Active Notification Banner */}
+        <AnimatePresence>
+          {appState.desktopStatus && (appState.desktopStatus.state === "executing" || appState.desktopStatus.state === "awaiting_permission" || appState.desktopStatus.state === "planning") && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="w-full max-w-xl mx-auto mt-3 p-3 rounded-xl bg-cyan-950/80 border border-cyan-500/40 backdrop-blur-md flex items-center justify-between gap-3 shadow-lg shadow-cyan-950/50"
+            >
+              <div className="flex items-center gap-2.5">
+                <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping shrink-0" />
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-cyan-300 font-semibold">
+                    {appState.desktopStatus.state === "awaiting_permission" ? "AUTHORIZATION REQUIRED" : "PC CONTROL DIRECTIVE ACTIVE"}
+                  </span>
+                  <span className="text-xs font-mono text-white truncate max-w-xs sm:max-w-md">
+                    {appState.desktopStatus.currentTask || appState.desktopStatus.lastAction || "Executing Windows operation..."}
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => session?.stopDesktopTask()}
+                className="px-3 py-1 bg-rose-500/30 hover:bg-rose-500/50 border border-rose-500/50 text-rose-200 text-xs font-mono rounded-lg transition-colors cursor-pointer shrink-0 font-semibold"
+              >
+                STOP
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </section>
 
       {/* 5.5 Tactical Cockpit Dashboard Tab Switcher */}
       <section className="relative w-full max-w-4xl mx-auto px-6 mb-8 z-10 flex flex-col gap-5">
 
-        <div className="flex flex-wrap items-center justify-center gap-1.5 bg-white/[0.03] border border-white/5 p-1 rounded-xl max-w-md mx-auto w-full">
+        <div className="flex flex-wrap items-center justify-center gap-1.5 bg-white/[0.03] border border-white/5 p-1 rounded-xl max-w-lg mx-auto w-full">
           <button
             onClick={() => setActiveDashboardTab("memory")}
-            className={`flex-1 min-w-[100px] py-2 text-[10px] font-mono uppercase tracking-wider rounded-lg transition-all duration-300 cursor-pointer text-center ${
+            className={`flex-1 min-w-[90px] py-2 text-[10px] font-mono uppercase tracking-wider rounded-lg transition-all duration-300 cursor-pointer text-center ${
               activeDashboardTab === "memory"
                 ? `bg-white/10 border border-white/10 text-white font-medium`
                 : "text-slate-400 hover:text-white"
@@ -1767,13 +1848,24 @@ export default function App() {
           </button>
           <button
             onClick={() => setActiveDashboardTab("vision")}
-            className={`flex-1 min-w-[100px] py-2 text-[10px] font-mono uppercase tracking-wider rounded-lg transition-all duration-300 cursor-pointer text-center ${
+            className={`flex-1 min-w-[90px] py-2 text-[10px] font-mono uppercase tracking-wider rounded-lg transition-all duration-300 cursor-pointer text-center ${
               activeDashboardTab === "vision"
                 ? `bg-white/10 border border-white/10 text-white font-medium`
                 : "text-slate-400 hover:text-white"
             }`}
           >
             Screen Vision
+          </button>
+          <button
+            onClick={() => setActiveDashboardTab("desktop")}
+            className={`flex-1 min-w-[90px] py-2 text-[10px] font-mono uppercase tracking-wider rounded-lg transition-all duration-300 cursor-pointer text-center flex items-center justify-center gap-1.5 ${
+              activeDashboardTab === "desktop"
+                ? `bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 font-medium shadow-sm`
+                : "text-slate-400 hover:text-white"
+            }`}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${appState.desktopStatus?.state === "executing" ? "bg-emerald-400 animate-ping" : "bg-cyan-400"}`} />
+            PC Control
           </button>
         </div>
 
@@ -1800,6 +1892,17 @@ export default function App() {
                 transition={{ duration: 0.2 }}
               >
                 <VisionPanel primaryAccentClass={activeTheme.primaryAccent} session={session} />
+              </motion.div>
+            )}
+            {activeDashboardTab === "desktop" && (
+              <motion.div
+                key="desktop"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2 }}
+              >
+                <DesktopControlPanel primaryAccentClass={activeTheme.primaryAccent} session={session} />
               </motion.div>
             )}
           </AnimatePresence>
@@ -1848,6 +1951,16 @@ export default function App() {
         
 
       </footer>
+
+      {/* Screen Observation Authorization Modal */}
+      <ScreenAccessModal
+        isOpen={showScreenAuthModal}
+        onClose={() => setShowScreenAuthModal(false)}
+        onAuthorized={() => {
+          setIsScreenObserving(true);
+          addLog("Windows desktop observation authorized and active.", "success");
+        }}
+      />
     </div>
   );
 }

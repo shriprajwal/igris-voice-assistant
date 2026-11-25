@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { DesktopStatus } from "../desktop/types";
+
 export type SessionState = "disconnected" | "connecting" | "listening" | "speaking" | "muted";
 
 export interface LogEntry {
@@ -24,6 +26,7 @@ export interface AppState {
   errorMessage: string | null;
   voiceMode?: AIMode;
   shadowAuthStatus?: "idle" | "pending" | "failed" | "verified";
+  desktopStatus?: DesktopStatus;
 }
 
 type StateListener = (state: AppState) => void;

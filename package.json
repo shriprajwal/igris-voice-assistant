@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs && node -e \"fs.mkdirSync('dist/desktop/scripts', { recursive: true }); fs.copyFileSync('src/desktop/scripts/winAutomation.ps1', 'dist/desktop/scripts/winAutomation.ps1');\"",
     "start": "node dist/server.cjs",
     "clean": "node -e \"fs.rmSync('dist', { recursive: true, force: true })\"",
     "lint": "tsc --noEmit"

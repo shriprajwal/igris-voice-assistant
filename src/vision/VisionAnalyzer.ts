@@ -34,12 +34,21 @@ export class VisionAnalyzer {
    * Captures the current active frame and requests a real Gemini Vision audit from the backend.
    */
   public async analyzeCurrentScreen(question?: string, context?: string): Promise<VisionInsight | null> {
-    const frame = ScreenCapture.getInstance().captureFrame();
-    if (!frame) {
+    const capture = ScreenCapture.getInstance();
+    let cleanBase64 = capture.getRawBase64();
+    if (!cleanBase64) {
+      await capture.fetchLatestNativeFrame();
+      cleanBase64 = capture.getRawBase64();
+    }
+    if (!cleanBase64) {
+      const frame = capture.captureFrame();
+      if (frame && !frame.startsWith("blob:")) {
+        cleanBase64 = ImageProcessor.getInstance().getCleanBase64(frame);
+      }
+    }
+    if (!cleanBase64) {
       return null;
     }
-
-    const cleanBase64 = ImageProcessor.getInstance().getCleanBase64(frame);
 
     try {
       const response = await fetch("/api/analyze-vision", {
