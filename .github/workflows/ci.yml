@@ -44,11 +44,16 @@ jobs:
       - name: Install Node dependencies
         run: npm install --include=dev
 
-      - name: Install Python dependencies
-        run: python -m pip install -r requirements.txt
+      - name: Install Python dependencies (CI - lightweight, no Qt)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install psutil mss Pillow pywinauto
 
       - name: Run Python unit tests
-        run: python -m unittest discover tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+          IGRIS_CI: "1"
+        run: python -m unittest discover tests -v
 
       - name: Run TypeScript tests
         run: npm test
