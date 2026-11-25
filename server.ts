@@ -438,6 +438,7 @@ async function startServer() {
     let session: any = null;
     let isClosed = false;
     let shadowAuthState = "idle";
+    let latestClientVideoFrame = "";
 
     // Parse user memories and initText from connection query parameter to inject into systemInstruction
     let userDesignation = "Monarch";
@@ -1576,14 +1577,32 @@ DESKTOP CONTROL TOOLS:
                   try {
                     if (name === "openApplication") {
                       const pyRes = await callPythonEngine("OPEN_APPLICATION", { appName: args.appName, args: args.args });
-                      output = !pyRes.fallback ? pyRes : await DesktopEngine.getInstance().executeAction({
-                        id: id || `call_${Date.now()}`,
-                        type: "OPEN_APPLICATION",
-                        params: { appName: args.appName, args: args.args },
-                        description: `Open application '${args.appName}'`
-                      });
+                      if (!pyRes.fallback) {
+                        output = pyRes;
+                      } else if (process.platform !== "win32") {
+                        output = { success: false, cloudMode: true, message: "Desktop application launching is unavailable in the cloud web deployment. Run IGRIS locally on Windows to launch PC apps." };
+                      } else {
+                        output = await DesktopEngine.getInstance().executeAction({
+                          id: id || `call_${Date.now()}`,
+                          type: "OPEN_APPLICATION",
+                          params: { appName: args.appName, args: args.args },
+                          description: `Open application '${args.appName}'`
+                        });
+                      }
                     } else if (name === "controlBrowser") {
                       const sub = (args.subaction || "web_search").toLowerCase();
+                      if (process.platform !== "win32" && (sub === "web_search" || sub === "open_url" || sub === "new_tab")) {
+                        const targetUrl = sub === "web_search"
+                          ? `https://www.google.com/search?q=${encodeURIComponent(args.query || "")}`
+                          : (args.url || "https://www.google.com");
+                        clientWs.send(JSON.stringify({
+                          type: "tool_call",
+                          callId: id,
+                          name: sub === "new_tab" ? "openNewTab" : "openWebsite",
+                          args: { url: targetUrl, label: args.query || targetUrl }
+                        }));
+                        continue;
+                      }
                       if (sub === "web_search") {
                         output = await DesktopEngine.getInstance().executeAction({
                           id: id || `call_${Date.now()}`,
@@ -1782,6 +1801,8 @@ DESKTOP CONTROL TOOLS:
                           cleanBase64 = screenRes.rawBase64;
                         } else if (screenRes.success && screenRes.imagePath && fs.existsSync(screenRes.imagePath)) {
                           cleanBase64 = fs.readFileSync(screenRes.imagePath).toString("base64");
+                        } else if (latestClientVideoFrame) {
+                          cleanBase64 = latestClientVideoFrame;
                         }
                       }
                       const uiaSummary = Array.isArray(perceptionRes?.uiaElements)
@@ -1953,7 +1974,22 @@ DESKTOP CONTROL TOOLS:
                       const query = args.query || "";
                       const searchType = args.searchType || "web";
                       const pyRes = await callPythonEngine("BROWSER_SEARCH", { query, search_type: searchType });
-                      output = !pyRes.fallback ? pyRes : await BrowserController.getInstance().webSearch(query, true);
+                      if (!pyRes.fallback) {
+                        output = pyRes;
+                      } else if (process.platform !== "win32") {
+                        const targetUrl = searchType === "youtube"
+                          ? `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`
+                          : `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+                        clientWs.send(JSON.stringify({
+                          type: "tool_call",
+                          callId: id,
+                          name: "openWebsite",
+                          args: { url: targetUrl, label: query }
+                        }));
+                        continue;
+                      } else {
+                        output = await BrowserController.getInstance().webSearch(query, true);
+                      }
                     } else if (name === "universalClick") {
                       const target = args.target || "";
                       const pyRes = await callPythonEngine("BROWSER_CLICK", { target });
@@ -1998,7 +2034,16 @@ DESKTOP CONTROL TOOLS:
                       const action = args.action || "switch";
                       const query = args.query || "";
                       const pyRes = await callPythonEngine("BROWSER_TAB", { subaction: action, query });
-                      output = !pyRes.fallback ? pyRes : { success: true, message: `Tab action '${action}' dispatched.` };
+                      if (!pyRes.fallback) {
+                        output = pyRes;
+                      } else if (process.platform !== "win32") {
+                        const mappedTool = action === "new" ? "openNewTab" : action === "close" ? "closeTab" : "switchToTab";
+                        const mappedArgs = action === "new" ? { url: query } : action === "close" ? { tabId: query } : { tabId: query };
+                        clientWs.send(JSON.stringify({ type: "tool_call", callId: id, name: mappedTool, args: mappedArgs }));
+                        continue;
+                      } else {
+                        output = { success: true, message: `Tab action '${action}' dispatched.` };
+                      }
                     } else if (name === "universalMediaControl") {
                       const action = args.action || "toggle";
                       const target = args.target;
@@ -2007,13 +2052,34 @@ DESKTOP CONTROL TOOLS:
                     } else if (name === "switchToTab" || name === "focusExistingTab") {
                       const query = args.tabId || args.url || "";
                       const pyRes = await callPythonEngine("BROWSER_TAB", { subaction: "switch", query });
-                      output = !pyRes.fallback ? pyRes : { success: true, message: `Switched to tab matching '${query}'.` };
+                      if (!pyRes.fallback) {
+                        output = pyRes;
+                      } else if (process.platform !== "win32") {
+                        clientWs.send(JSON.stringify({ type: "tool_call", callId: id, name, args }));
+                        continue;
+                      } else {
+                        output = { success: true, message: `Switched to tab matching '${query}'.` };
+                      }
                     } else if (name === "closeTab") {
                       const pyRes = await callPythonEngine("BROWSER_TAB", { subaction: "close" });
-                      output = !pyRes.fallback ? pyRes : await BrowserController.getInstance().closeTab();
+                      if (!pyRes.fallback) {
+                        output = pyRes;
+                      } else if (process.platform !== "win32") {
+                        clientWs.send(JSON.stringify({ type: "tool_call", callId: id, name, args }));
+                        continue;
+                      } else {
+                        output = await BrowserController.getInstance().closeTab();
+                      }
                     } else if (name === "refreshActiveTab") {
                       const pyRes = await callPythonEngine("BROWSER_NAVIGATE", { subaction: "refresh" });
-                      output = !pyRes.fallback ? pyRes : { success: true, message: "Page refreshed." };
+                      if (!pyRes.fallback) {
+                        output = pyRes;
+                      } else if (process.platform !== "win32") {
+                        clientWs.send(JSON.stringify({ type: "tool_call", callId: id, name, args }));
+                        continue;
+                      } else {
+                        output = { success: true, message: "Page refreshed." };
+                      }
                     }
                   } catch (err: any) {
                     output = { success: false, error: err.message };
@@ -2093,6 +2159,7 @@ DESKTOP CONTROL TOOLS:
               }
             });
           } else if (msg.type === "video" && msg.data) {
+            latestClientVideoFrame = msg.data;
             // Forward client's screen capture frame base64 to Gemini Live Session
             session.sendRealtimeInput({
               video: {

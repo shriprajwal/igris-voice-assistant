@@ -55,6 +55,9 @@ export class ScreenCapture {
   private canvas: HTMLCanvasElement | null = null;
   private ctx: CanvasRenderingContext2D | null = null;
   private canvasStream: MediaStream | null = null;
+  private displayStream: MediaStream | null = null;
+  private displayVideo: HTMLVideoElement | null = null;
+  private displayTimer: ReturnType<typeof setInterval> | null = null;
 
   // Latest frame data
   private latestFrame: string | null = null;      // data:image/jpeg;base64,...
@@ -143,9 +146,94 @@ export class ScreenCapture {
     if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
       return; // already connected
     }
+    if (this.displayStream) {
+      return; // browser screen share already active
+    }
     this.stopRequested = false;
     this.selectedMonitorId = monitorId;
-    this._openWs(monitorId);
+
+    // Check if native Python screen capture is available; otherwise fall back to browser getDisplayMedia()
+    this.checkStatus().then((st) => {
+      if (this.stopRequested) return;
+      if (st !== null) {
+        this._openWs(monitorId);
+      } else {
+        this._startBrowserDisplayCapture();
+      }
+    });
+  }
+
+  private async _startBrowserDisplayCapture(): Promise<void> {
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getDisplayMedia) {
+      this.lastError = "Screen sharing is not supported in this browser.";
+      this.isActive = false;
+      this.notifyListeners();
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { frameRate: { ideal: 12, max: 15 } },
+        audio: false
+      });
+      if (this.stopRequested) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
+
+      this.displayStream = stream;
+      const video = document.createElement("video");
+      video.srcObject = stream;
+      video.muted = true;
+      video.playsInline = true;
+      await video.play();
+      this.displayVideo = video;
+
+      const track = stream.getVideoTracks()[0];
+      if (track) {
+        track.onended = () => {
+          this.disconnect();
+        };
+      }
+
+      this.isActive = true;
+      this.lastError = null;
+      this.notifyListeners();
+
+      this.displayTimer = setInterval(() => {
+        if (this.stopRequested || !this.displayVideo || !this.canvas || !this.ctx) return;
+        const vw = this.displayVideo.videoWidth;
+        const vh = this.displayVideo.videoHeight;
+        if (!vw || !vh) return;
+
+        // Downscale if larger than 1280px wide to keep Gemini Vision & UI responsive
+        const scale = vw > 1280 ? 1280 / vw : 1;
+        const tw = Math.round(vw * scale);
+        const th = Math.round(vh * scale);
+        if (this.canvas.width !== tw || this.canvas.height !== th) {
+          this.canvas.width = tw;
+          this.canvas.height = th;
+        }
+        this.frameWidth = tw;
+        this.frameHeight = th;
+        this.screenWidth = vw;
+        this.screenHeight = vh;
+        this.ctx.drawImage(this.displayVideo, 0, 0, tw, th);
+
+        this.canvas.toBlob((blob) => {
+          if (!blob || this.stopRequested) return;
+          blob.arrayBuffer().then((buf) => {
+            if (!this.stopRequested) {
+              this._processJpegFrame(new Uint8Array(buf));
+            }
+          }).catch(() => {});
+        }, "image/jpeg", 0.72);
+      }, 85);
+    } catch (err: any) {
+      this.lastError = err?.message || "Screen share permission denied or cancelled.";
+      this.isActive = false;
+      this.notifyListeners();
+    }
   }
 
   private _openWs(monitorId: number): void {
@@ -251,6 +339,15 @@ export class ScreenCapture {
   public disconnect(): void {
     this.stopRequested = true;
     if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = null; }
+    if (this.displayTimer) { clearInterval(this.displayTimer); this.displayTimer = null; }
+    if (this.displayStream) {
+      try { this.displayStream.getTracks().forEach((t) => t.stop()); } catch {}
+      this.displayStream = null;
+    }
+    if (this.displayVideo) {
+      try { this.displayVideo.srcObject = null; } catch {}
+      this.displayVideo = null;
+    }
     if (this.ws) {
       try { this.ws.close(); } catch {}
       this.ws = null;
